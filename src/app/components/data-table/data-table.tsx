@@ -20,15 +20,19 @@ import {
 
 import {
   DndContext,
+  closestCenter,
   KeyboardSensor,
   MouseSensor,
+  PointerSensor,
   TouchSensor,
-  closestCenter,
   type DragEndEvent,
+  type UniqueIdentifier,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
+import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import {
+  arrayMove,
   SortableContext,
   horizontalListSortingStrategy,
 } from "@dnd-kit/sortable";
@@ -73,6 +77,13 @@ export function DataTable<TData, TValue>({
     right: ["actions"],
   });
   const [isAdvancedOpen, setIsAdvancedOpen] = React.useState(false);
+
+  // Add this state to prevent hydration mismatch
+  const [isMounted, setIsMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const table = useReactTable({
     data,
@@ -177,6 +188,57 @@ export function DataTable<TData, TValue>({
     return `${baseStyles} ${positionStyles}`;
   };
 
+  const renderTable = () => (
+    <Table style={{ minWidth: `${table.getTotalSize()}px` }}>
+      <TableHeader>
+        <TableRow>
+          {table.getHeaderGroups().map((headerGroup) =>
+            headerGroup.headers.map((header) => (
+              <DataTableHeader
+                key={header.id}
+                header={header}
+                className={getPinnedStyles(header.column.getIsPinned())}
+              >
+                {header.isPlaceholder
+                  ? null
+                  : flexRender(header.column.columnDef.header, header.getContext())}
+              </DataTableHeader>
+            ))
+          )}
+        </TableRow>
+      </TableHeader>
+
+      <TableBody>
+        {table.getRowModel().rows?.length ? (
+          table.getRowModel().rows.map((row) => (
+            <TableRow
+              key={row.id}
+              data-state={row.getIsSelected() && "selected"}
+            >
+              {row.getVisibleCells().map((cell) => {
+                const isPinned = cell.column.getIsPinned();
+                return (
+                  <TableCell
+                    key={cell.id}
+                    className={getPinnedStyles(isPinned)}
+                  >
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                );
+              })}
+            </TableRow>
+          ))
+        ) : (
+          <TableRow>
+            <TableCell colSpan={columns.length} className="h-24 text-center">
+              No results.
+            </TableCell>
+          </TableRow>
+        )}
+      </TableBody>
+    </Table>
+  );
+
   return (
     <div className="w-full space-y-4">
       <DataTableToolbar
@@ -194,72 +256,26 @@ export function DataTable<TData, TValue>({
       />
 
       <div className="rounded-md border">
-        <DndContext
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-          sensors={sensors}
-        >
-          <div className="overflow-x-auto">
-            <Table style={{ minWidth: "100%" }}>
-              <TableHeader>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    <SortableContext
-                      items={columnOrder.filter(
-                        (id) => id !== "select" && id !== "actions"
-                      )}
-                      strategy={horizontalListSortingStrategy}
-                    >
-                      {headerGroup.headers.map((header) => {
-                        const isPinned = header.column.getIsPinned();
-                        return (
-                          <DataTableHeader
-                            key={header.id}
-                            header={header}
-                            className={getPinnedStyles(isPinned)}
-                          >
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                          </DataTableHeader>
-                        );
-                      })}
-                    </SortableContext>
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {table.getRowModel().rows?.length ? (
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      data-state={row.getIsSelected() && "selected"}
-                    >
-                      {row.getVisibleCells().map((cell) => {
-                        const isPinned = cell.column.getIsPinned();
-                        return (
-                          <TableCell
-                            key={cell.id}
-                            className={getPinnedStyles(isPinned)}
-                          >
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={columns.length} className="h-24 text-center">
-                      No results.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </DndContext>
+        <div className="overflow-x-auto">
+          {isMounted ? (
+            <DndContext
+              id="table-dnd-context"
+              collisionDetection={closestCenter}
+              modifiers={[restrictToHorizontalAxis]}
+              onDragEnd={handleDragEnd}
+              sensors={sensors}
+            >
+              <SortableContext
+                items={columnOrder.map((id) => id)}
+                strategy={horizontalListSortingStrategy}
+              >
+                {renderTable()}
+              </SortableContext>
+            </DndContext>
+          ) : (
+            renderTable()
+          )}
+        </div>
       </div>
 
       <DataTablePagination table={table} />

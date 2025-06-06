@@ -2,11 +2,8 @@
 
 import { DataTable } from "../data-table/data-table";
 import { createColumns } from "../data-table/column-definitions";
-import {
-  fileSystemData,
-  FileSystemItem,
-  getUniqueValues,
-} from "../data-table/data-table-header";
+import { getUniqueValues } from "../data-table/data-table-header";
+import { fileSystemData, FileSystemItem } from "./data";
 
 export function ContentTable() {
   const uniqueStudyIds = getUniqueValues(fileSystemData, "uniqueStudyId");
